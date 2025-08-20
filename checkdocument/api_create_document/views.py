@@ -66,7 +66,7 @@ def generate_document(first_image,back_image,first_image_2,back_image_2,document
     front_image_2 = load_image(first_image_2)
     back_image_2 = load_image(back_image_2)
 
-    if layout == "us":
+    if layout == "ONENOTARY":
         image_width = 280
         image_height = 230
         page_width, page_height = A4
@@ -102,7 +102,7 @@ def generate_document(first_image,back_image,first_image_2,back_image_2,document
         output.write(result_buffer)
         result_buffer.seek(0)
         return FileResponse(result_buffer, as_attachment=True, filename="Notary_Format_document.pdf")
-    elif layout == "uk":
+    elif layout == "UK88":
         width = 230
         height = 190
         current_y=570
@@ -345,7 +345,7 @@ class GeneratePDFView(APIView):
         back_image_2 = request.FILES.get('back_image2')
         multiPagePdf = request.FILES.get('multi_page_pdf')
         document_type = request.data.get('document_type', 'Default Document Type')
-        layout = request.data.get('layout', 'normal')
+        layout = request.data.get('layout', 'STANDARD')
         qr_text = request.data.get('qr_text', 'Temp para')
 
         response = generate_document(first_image,back_image,first_image_2,back_image_2,document_type,layout,multiPagePdf,qr_text)
