@@ -8,6 +8,7 @@ function App() {
   const [backImage1, setbackImage1] = useState(null);
   const [frontImage2, setfrontImage2] = useState(null);
   const [backImage2, setbackImage2] = useState(null);
+  const [MultiPagePdf,setmultipagePdf]= useState(null)
   const [selected, setSelected] = useState('');
 
   const options = [
@@ -34,6 +35,9 @@ function App() {
     }
     if (backImage2){
       formData.append("back_image2",backImage2)
+    }
+    if (MultiPagePdf){
+      formData.append("multi_page_pdf",MultiPagePdf)
     }
 
     formData.append("layout", layoutType);
@@ -79,13 +83,13 @@ function App() {
 
         <form>
           <div style={styles.field}>
-            <label style={styles.label}>Front Image (required):</label>
+            <label style={styles.label}>Front Image (optional):</label>
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setfrontImage1(e.target.files[0])}
               style={styles.input}
-              required
+
             />
             {frontImage1 && <p style={styles.filename}>📎 {frontImage1.name}</p>}
           </div>
@@ -120,6 +124,19 @@ function App() {
               style={styles.input}
             />
             {backImage2 && <p style={styles.filename}>📎 {backImage2.name}</p>}
+            
+          </div>
+          <div style={styles.field}>
+            <label style={styles.label}>MultiPagePdf(optional):</label>
+            <input
+              type="file"
+              accept="application/pdf,image/*"
+              onChange={(e) => setmultipagePdf(e.target.files[0])}
+              style={styles.input}
+            />
+
+            
+            {MultiPagePdf && <p style={styles.filename}>📎 {MultiPagePdf.name}</p>}
           </div>
           <div style={styles.field}>
             <label>Select your card</label>
@@ -146,7 +163,7 @@ function App() {
             <button
               type="button"
               onClick={() => handleSubmit("us")}
-              style={{ ...styles.button, backgroundColor: "#008CBA" }}
+              style={{ ...styles.button, backgroundColor: "#2b8fb1ff" }}
               className="button-glow"
             >
               🇺🇸 Generate US PDF
@@ -154,12 +171,19 @@ function App() {
             <button
               type="button"
               onClick={() => handleSubmit("uk")}
-              style={{ ...styles.button, backgroundColor: "#008CCD" }}
+              style={{ ...styles.button, backgroundColor: "#00cd85ff" }}
               className="button-glow"
             >
               Generate UK PDF
              </button> 
-            
+            <button
+              type="button"
+              onClick={() => handleSubmit("multi")}
+              style={{ ...styles.button, backgroundColor: "#c300cdff" }}
+              className="button-glow"
+            >
+              Generate Multi PDF
+             </button> 
           </div>
 
         </form>

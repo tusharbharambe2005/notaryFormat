@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.utils import ImageReader
 import textwrap
 
-from PyPDF2 import PdfReader, PdfWriter
+from PyPDF2 import PdfReader, PdfWriter, PdfMerger
 
 from io import BytesIO
 import os
@@ -56,7 +56,7 @@ def draw_paragraph_with_bold(c,paragraph,start_x,start_y,width=80,font_size=10,b
     c.drawText(text_obj)
 
 # Generate document
-def generate_document(first_image,back_image,first_image_2,back_image_2,document_type,layout,qr_text="Temp para",customer_name="Tushar Bharambe",schedule_date="2023-10-1"):
+def generate_document(first_image,back_image,first_image_2,back_image_2,document_type,layout,multiPagePdf, qr_text="Temp para",customer_name="Tushar Bharambe",schedule_date="2023-10-1"):
 
     overlay_buffer = BytesIO()
     page_width, page_height = A4
@@ -144,7 +144,81 @@ def generate_document(first_image,back_image,first_image_2,back_image_2,document
         overlay_buffer.seek(0)
         print("all done")
         return FileResponse(overlay_buffer, as_attachment=True, filename="Notary_Format_document.pdf")
+    
+    elif layout=='us_multipage':
+        # print("done ####################")
+        
+        c = canvas.Canvas(overlay_buffer, pagesize=A4)
+        template_path = os.path.join(settings.MEDIA_ROOT, 'templates', 'US_MultiPage_format.pdf')
+        original_pdf = PdfReader(open(template_path, "rb"))
+        base_page = original_pdf.pages[0]
+        overlay_buffer = BytesIO()
+        
+            #add the document type this
+        c = canvas.Canvas(overlay_buffer, pagesize=A4)
+        c.drawString(205, 594, document_type)   
+        c.save()
+        overlay_buffer.seek(0)
             
+        overlay_Add_DT_pdf = PdfReader(overlay_buffer)# DT= document type
+            
+        # Merge text overlay into base page
+        output_writer = PdfWriter()
+        base_page.merge_page(overlay_Add_DT_pdf.pages[0])
+        output_writer.add_page(base_page)
+            
+        # Save first modified PDF in memory
+        modified_pdf_buffer = BytesIO()
+        output_writer.write(modified_pdf_buffer)
+        modified_pdf_buffer.seek(0)
+
+        response_pdf = BytesIO(multiPagePdf.read())
+        multiPagePdf.seek(0)  # reset so Django doesn't lose file
+            
+        # 4. Merge modified first PDF + second PDF
+        merger = PdfMerger()
+        merger.append(modified_pdf_buffer)  # first (with document_type text)
+        merger.append(response_pdf)         # second (response throw)
+            
+            
+        final_buffer = BytesIO()
+        merger.write(final_buffer)
+        merger.close()
+        final_buffer.seek(0)
+        return FileResponse(final_buffer,as_attachment=True,filename="Multi_Page_Pdf.pdf")
+            
+    elif layout=='non_multipage':
+        overlay_buffer = BytesIO()
+        c = canvas.Canvas(overlay_buffer, pagesize=A4)
+
+        qr_image = generate_QR(qr_text, size=70)  # Should return path or BytesIO of PNG
+        c.drawImage(qr_image, x=20, y=10, width=70, height=70)
+        c.save()
+
+        overlay_buffer.seek(0)
+
+        # Step 2: Read base and overlay PDFs
+        base_pdf = PdfReader(multiPagePdf)
+        overlay_pdf = PdfReader(overlay_buffer)
+
+        total_page = len(base_pdf.pages)
+        # Step 3: Merge overlay onto the first page (or loop for all pages)
+        output = PdfWriter()
+        for  i,base_page in enumerate(base_pdf.pages):
+            # You can apply overlay only on first page, or all pages
+            if i == total_page-1:
+                base_page.merge_page(overlay_pdf.pages[0])
+            output.add_page(base_page)
+
+        # Step 4: Write result to buffer
+        result_buffer = BytesIO()
+        output.write(result_buffer)
+        result_buffer.seek(0)
+
+        
+        return FileResponse(result_buffer, as_attachment=True, filename="multi_Format_document.pdf")
+        
+
     else:
         c= canvas.Canvas(overlay_buffer, pagesize=A4)
         if front_image and back_image and front_image_2 and back_image_2:
@@ -257,6 +331,8 @@ def generate_document(first_image,back_image,first_image_2,back_image_2,document
         c.drawImage(qr_image, x=20, y=10, width=70, height=70)
         c.save()
         overlay_buffer.seek(0)
+        
+        
         return FileResponse(overlay_buffer, as_attachment=True, filename="Notary_Format_document.pdf")
 
 class GeneratePDFView(APIView):
@@ -267,9 +343,10 @@ class GeneratePDFView(APIView):
         back_image = request.FILES.get('back_image')
         first_image_2 = request.FILES.get('front_image2')
         back_image_2 = request.FILES.get('back_image2')
+        multiPagePdf = request.FILES.get('multi_page_pdf')
         document_type = request.data.get('document_type', 'Default Document Type')
         layout = request.data.get('layout', 'normal')
         qr_text = request.data.get('qr_text', 'Temp para')
 
-        response = generate_document(first_image, back_image, first_image_2, back_image_2, document_type, layout, qr_text)
+        response = generate_document(first_image,back_image,first_image_2,back_image_2,document_type,layout,multiPagePdf,qr_text)
         return response
