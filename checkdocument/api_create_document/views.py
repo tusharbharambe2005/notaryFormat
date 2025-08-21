@@ -217,7 +217,61 @@ def generate_document(first_image,back_image,first_image_2,back_image_2,document
 
         
         return FileResponse(result_buffer, as_attachment=True, filename="multi_Format_document.pdf")
+    elif layout == 'UK88_MULTIPAGE':
+        # 1. Create buffer for paragraph page
+        overlay_buffer = BytesIO()
+        c = canvas.Canvas(overlay_buffer, pagesize=A4)
         
+        
+        width = 230
+        paragraph = (
+            f"I, JOHN OLATUNJI OF ONE LONDON SQUARE, CROSS LANES, GUILDFORD, GU1 1UN, "
+            f"A DULY AUTHORISED NOTARY PUBLIC OF ENGLAND AND WALES CERTIFY THAT THIS IS A TRUE COPY OF THE DOCUMENT "
+            f"{document_type} OF {customer_name} PRODUCED TO ME THIS {schedule_date} "
+            f"AND I FURTHER CERTIFY THAT THE INDIVIDUAL THAT APPEARED BEFORE ME VIA VIDEO CONFERENCE CALL IS INDEED "
+            f"AND BEARS THE TRUE LIKENESS OF {customer_name}."
+        )
+
+        # Bold words list
+        bold_words = [
+            word.upper() for word in (document_type.split() + customer_name.split() + [schedule_date])
+        ]
+
+        # Draw paragraph
+        draw_paragraph_with_bold(c, paragraph, 50, 800, width=width, font_size=10, bold_words=bold_words)
+        
+        ###### add QR
+        qr_image = generate_QR(qr_text, size=70)  # Should return path or BytesIO of PNG
+        c.drawImage(qr_image, x=20, y=10, width=70, height=70)
+        c.save()
+
+        # 2. Convert to PDF
+        overlay_buffer.seek(0)
+        overlay_pdf = PdfReader(overlay_buffer)
+
+        # 3. Take first page (the paragraph page)
+        paragraph_page_buffer = BytesIO()
+        writer = PdfWriter()
+        writer.add_page(overlay_pdf.pages[0])
+        writer.write(paragraph_page_buffer)
+        paragraph_page_buffer.seek(0)
+
+        # 4. Read the multipage PDF (original document)
+        response_pdf = BytesIO(multiPagePdf.read())
+        multiPagePdf.seek(0)
+
+        # 5. Merge both
+        merger = PdfMerger()
+        merger.append(paragraph_page_buffer)  # First: paragraph page
+        merger.append(response_pdf)           # Then: original multipage PDF
+
+        # 6. Return final file
+        final_buffer = BytesIO()
+        merger.write(final_buffer)
+        merger.close()
+        final_buffer.seek(0)
+
+        return FileResponse(final_buffer, as_attachment=True, filename="UK88_Multi_Page_Pdf.pdf")
 
     else:
         c= canvas.Canvas(overlay_buffer, pagesize=A4)
