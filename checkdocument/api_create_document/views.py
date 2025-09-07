@@ -50,6 +50,43 @@ def compress_image(img, max_width=1200, quality=60):
     buf.seek(0)
     return buf
 
+#compress PDF in multipageformat
+def compress_pdf_multipage(input_buffer, dpi=100, quality=60):
+    """
+    Two-step PDF compression:
+    1. Rasterize & recompress images (fitz)
+    """
+    input_buffer.seek(0)
+    doc = fitz.open(stream=input_buffer.read(), filetype="pdf")
+
+    compressed_buffer = BytesIO()
+    c = canvas.Canvas(compressed_buffer, pagesize=A4)
+    page_width, page_height = A4
+
+    for page_num in range(len(doc)):
+        pix = doc[page_num].get_pixmap(dpi=dpi)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+        # Recompress image
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        buf.seek(0)
+
+        # Scale to A4
+        img_width, img_height = img.size
+        ratio = min(page_width / img_width, page_height / img_height)
+        new_width = img_width * ratio
+        new_height = img_height * ratio
+        x = (page_width - new_width) / 2
+        y = (page_height - new_height) / 2
+
+        c.drawImage(ImageReader(buf), x, y, width=new_width, height=new_height)
+        c.showPage()
+
+    c.save()
+    compressed_buffer.seek(0)
+    return compressed_buffer
+
 
 def load_image(file):
     """
@@ -78,6 +115,8 @@ def load_image(file):
 
     # Normal image
     try:
+        # file1=Image.open(file)
+        # print(file1.size)
         return ImageOps.exif_transpose(Image.open(file))
     except Exception:
         return None
@@ -128,7 +167,7 @@ def draw_paragraph_with_bold(c, paragraph, start_x, start_y, width=80, font_size
         for word in line.split(" "):
             if word.strip(",.").upper() in bold_words:
                 text_obj.setFont("Helvetica-Bold", font_size)
-                print(text_obj)
+                # print(text_obj)
             else:
                 text_obj.setFont("Helvetica", font_size)
             text_obj.textOut(word + " ")
@@ -188,6 +227,26 @@ def convert_images_to_pdf(files):
     pdf_buffer.seek(0)
     return pdf_buffer
 
+### convert the image size in points
+def get_image_size_in_points(img_buf):
+    """
+    Convert a compressed BytesIO (JPEG/PNG) into width/height in points.
+    Default assumes 96 dpi if no dpi is stored.
+    """
+    img = Image.open(img_buf)
+    # print(img.info)
+    # dpi_val = img.info.get("dpi", (140 ,96))[0]
+    dpi_val = img.info.get("dpi", (144 , 144 ))[0]  # fallback to 96 if not present
+
+    
+    # print(dpi_val)
+    width_px, height_px = img.size
+    print(width_px)
+    width_pt = (width_px / dpi_val) * 72
+    height_pt = (height_px / dpi_val) * 72
+    print(f"width{float(width_pt)}")
+    print(f"hight+{float(height_pt)}")
+    return width_pt, height_pt
 
 # -----------------------
 # Main Document Generator
@@ -196,8 +255,8 @@ def convert_images_to_pdf(files):
 def generate_document(first_image, back_image, first_image_2, back_image_2,
                       document_type, layout, multiPagePdf,
                       qr_text, customer_name, schedule_date=None):
-    print(f"{customer_name} this constomer name")
-    print(f"{qr_text} qr text")
+    # print(f"{customer_name} this constomer name")
+    # print(f"{qr_text} qr text")
 
     overlay_buffer = BytesIO()
     # Enable page compression on every canvas we create
@@ -209,12 +268,20 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
     back_image = load_image(back_image)
     front_image_2 = load_image(first_image_2)
     back_image_2 = load_image(back_image_2)
+    
+    # img =Image.open(first_image)
+    # dpi = img.info.get("dpi", (96, 96))[0]  # fallback to 96 if not present
+
+    # print(f"DPI: {dpi}")
+    # print(front_image)
+    # print(back_image)
 
     # Compress only if we got a PIL image (lists mean PDF pages; not used here)
     front_image = compress_image(front_image)
     back_image = compress_image(back_image)
     front_image_2 = compress_image(front_image_2)
     back_image_2 = compress_image(back_image_2)
+    
     
 
     # -------------------------
@@ -316,7 +383,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         merger.write(final_buffer)
         merger.close()
         final_buffer.seek(0)
-        return FileResponse(final_buffer, as_attachment=True, filename="UK88_Multi_Page_Pdf.pdf")
+        compressed_final = compress_pdf_multipage(final_buffer)
+        return FileResponse(compressed_final, as_attachment=True, filename="UK88_Multi_Page_Pdf.pdf")
 
     elif layout == "us_multipage":
         template_path = os.path.join(settings.MEDIA_ROOT, 'templates', 'US_MultiPage_format.pdf')
@@ -351,7 +419,9 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         merger.write(final_buffer)
         merger.close()
         final_buffer.seek(0)
-        return FileResponse(final_buffer, as_attachment=True, filename="Multi_Page_Pdf.pdf")
+        compressed_final = compress_pdf_multipage(final_buffer)
+        
+        return FileResponse(compressed_final, as_attachment=True, filename="Multi_Page_Pdf.pdf")
 
     elif layout == "non_multipage":
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
@@ -426,11 +496,21 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
             c.drawImage(ImageReader(front_image_2), x_center, current_y - height - 20, width, height)
 
+        # elif front_image:
+        #     width, height = 270, 180
+        #     x_center = (page_width - width) / 2
+        #     current_y = page_height - height - 50
+        #     c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
         elif front_image:
-            width, height = 270, 180
-            x_center = (page_width - width) / 2
-            current_y = page_height - height - 50
-            c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
+            front_image.seek(0)
+            img_width, img_height = get_image_size_in_points(front_image)
+
+            # center on page
+            x_center = (page_width - img_width) / 2
+            current_y = page_height - img_height - 50
+
+            c.drawImage(ImageReader(front_image), x_center, current_y,
+                width=img_width, height=img_height)
 
         add_qr(c, qr_text)
         c.save()
