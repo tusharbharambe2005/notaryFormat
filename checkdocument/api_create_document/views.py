@@ -277,6 +277,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
     back_image = compress_image(back_image, quality=80)
     front_image_2 = compress_image(front_image_2, quality=80)
     back_image_2 = compress_image(back_image_2, quality=80)
+    
+    #static width and height
     width = 270
     height = 180  
     # -------------------------
@@ -341,13 +343,15 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
 
         if front_image and back_image:
-            width, height = calculate_dynamic_size(back_image, max_width=width, max_height=height)
-            x_center = (page_width - width) / 2
+            width1, height1 = calculate_dynamic_size(front_image, max_width=width, max_height=height)
+            width2, height2 = calculate_dynamic_size(back_image, max_width=width, max_height=height)
+            x_center1 = (page_width - width1) / 2
+            x_center2 = (page_width - width2) / 2
             back_image.seek(0)
             front_image.seek(0)
             
-            c.drawImage(ImageReader(front_image), x_center, 570, width=width, height=height)
-            c.drawImage(ImageReader(back_image), x_center, 320, width=width, height=height)
+            c.drawImage(ImageReader(front_image), x_center1, 570, width=width1, height=height1)
+            c.drawImage(ImageReader(back_image), x_center2, 320, width=width2, height=height2)
             
         elif front_image  :
             width, height = calculate_dynamic_size(front_image, max_width=width, max_height=height)
@@ -477,29 +481,41 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             # height = 180
             current_x = 30
             x_back = (page_width - current_x) / 2
+            width1, height1 = calculate_dynamic_size(front_image, width, height)
+            width2, height2 = calculate_dynamic_size(back_image, width, height)
+            width3, height3 = calculate_dynamic_size(front_image_2, width, height)
+            width4, height4 = calculate_dynamic_size(back_image_2, width, height)
 
-            c.drawImage(ImageReader(front_image), current_x, current_y, width, height)
-            c.drawImage(ImageReader(back_image), x_back+20, current_y, width, height)
-            c.drawImage(ImageReader(front_image_2), current_x, 350, width, height)
-            c.drawImage(ImageReader(back_image_2), x_back+20, 350, width, height)
+            c.drawImage(ImageReader(front_image), current_x, current_y, width1, height1)
+            c.drawImage(ImageReader(back_image), x_back+20, current_y, width2, height2)
+            c.drawImage(ImageReader(front_image_2), current_x, 350, width3, height3)
+            c.drawImage(ImageReader(back_image_2), x_back+20, 350, width4, height4)
 
         elif front_image and front_image_2 and back_image_2:
                 x_center = (page_width - width) / 2
             
                 # One large on top, two smaller below
                 # width, height = 270, 180
+                width1, height1 = calculate_dynamic_size(front_image, width, height)
+                width2, height2 = calculate_dynamic_size(front_image_2, width, height)
+                width3, height3 = calculate_dynamic_size(back_image_2, width, height)
+                
                 
                 # c.drawImage(ImageReader(front_image), 160, 530, width, height)
-                c.drawImage(ImageReader(front_image), x_center, 530, width, height)
-                c.drawImage(ImageReader(front_image_2), 10, 260, width, height)
-                c.drawImage(ImageReader(back_image_2), 10+width+20, 260, width, height)
+                c.drawImage(ImageReader(front_image), x_center, 530, width1, height1)
+                c.drawImage(ImageReader(front_image_2), 10, 260, width2, height2)
+                c.drawImage(ImageReader(back_image_2), 10+width+20, 260, width3, height3)
             
         elif front_image and back_image and front_image_2:
                 # Two on top, one below
                 # width, height = 270, 180
-                c.drawImage(ImageReader(front_image), 40, 550, width, height)
-                c.drawImage(ImageReader(back_image), 40+width, 550, width, height)
-                c.drawImage(ImageReader(front_image_2), (page_width-width)/2, 250, width, height)
+                width1, height1 = calculate_dynamic_size(front_image, width, height)
+                width2, height2 = calculate_dynamic_size(back_image, width, height)
+                width3, height3 = calculate_dynamic_size(front_image_2, width, height)
+                
+                c.drawImage(ImageReader(front_image), 40, 550, width1, height1)
+                c.drawImage(ImageReader(back_image), 40+width, 550, width2, height2)
+                c.drawImage(ImageReader(front_image_2), (page_width-width)/2, 250, width3, height3)
 
         elif front_image and back_image:
             
