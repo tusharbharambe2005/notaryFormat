@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
+# from rest_framework.response import Response
 from django.http import FileResponse
 from django.conf import settings
 
@@ -20,67 +21,31 @@ import fitz
 # Helpers
 # -----------------------
 
-def calculate_dynamic_size(img_buffer, max_width=400, max_height=300, min_width=200, min_height=150):
-    """
-    Calculate dynamic width and height maintaining aspect ratio.
-    Returns optimal size within given bounds.
-    """
-    img = Image.open(img_buffer)
-    original_width, original_height = img.size
-    img_buffer.seek(0)  # Reset buffer position
-    
-    # Calculate aspect ratio
-    aspect_ratio = original_width / original_height
-    
-    # Start with max dimensions and scale down if needed
-    if aspect_ratio > 1:  # Landscape
-        width = min(max_width, original_width)
-        height = width / aspect_ratio
-        
-        if height > max_height:
-            height = max_height
-            width = height * aspect_ratio
-    else:  # Portrait or square
-        height = min(max_height, original_height)
-        width = height * aspect_ratio
-        
-        if width > max_width:
-            width = max_width
-            height = width / aspect_ratio
-    
-    # Ensure minimum sizes
-    if width < min_width:
-        width = min_width
-        height = width / aspect_ratio
-    
-    if height < min_height:
-        height = min_height
-        width = height * aspect_ratio
-    
-    return int(width), int(height)
 
-
-def compress_image(img, max_width=1200, quality=75):
+###########################################
+# compress_image
+###########################################
+def compress_image(img, max_width=1200, quality=60):
     """
     Resize + compress a PIL.Image to JPEG in a BytesIO buffer.
     SAFE: returns None if img is None.
-    Increased quality to 75 for better clarity.
+    If img is already a BytesIO (assumed compressed), returns it unchanged.
     """
+
     if not isinstance(img, Image.Image):
-        return None  #  skip invalid inputs
+        return None  # safety: skip invalid inputs
     
     if img.mode != "RGB":
         img = img.convert("RGB")
 
-    # Scale down if too large, but maintain better quality
+    # Scale down if too large
     if img.width > max_width:
         ratio = max_width / float(img.width)
         new_height = int(img.height * ratio)
-        # Use LANCZOS for better quality resizing
-        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        img = img.resize((max_width, new_height), Image.LANCZOS)
 
     buf = BytesIO()
-    # Increased quality for better clarity
+    # JPEG compression; quality=60 is a solid size/clarity tradeoff
     img.save(buf, format="JPEG", quality=quality, optimize=True)
     buf.seek(0)
     return buf
@@ -88,7 +53,8 @@ def compress_image(img, max_width=1200, quality=75):
 #compress PDF in multipageformat
 def compress_pdf_multipage(input_buffer, dpi=100, quality=60):
     """
-    Rasterize & recompress images (fitz)
+    Two-step PDF compression:
+    1. Rasterize & recompress images (fitz)
     """
     input_buffer.seek(0)
     doc = fitz.open(stream=input_buffer.read(), filetype="pdf")
@@ -135,20 +101,22 @@ def load_image(file):
 
     filename = getattr(file, "name", "").lower()
 
-    # PDF: render each page with higher DPI for better quality
+    # PDF: render each page
     if filename.endswith(".pdf"):
         pdf_bytes = file.read()
         file.seek(0)
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         images = []
         for page_num in range(len(doc)):
-            pix = doc[page_num].get_pixmap(dpi=150)  # Increased DPI
+            pix = doc[page_num].get_pixmap(dpi=100)  # lower DPI for size
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             images.append(ImageOps.exif_transpose(img))
         return images
 
     # Normal image
     try:
+        # file1=Image.open(file)
+        # print(file1.size)
         return ImageOps.exif_transpose(Image.open(file))
     except Exception:
         return None
@@ -171,6 +139,7 @@ def generate_QR(data, size=70):
 
 
 def build_notary_paragraph(document_type, customer_name, schedule_date):
+
     return (
         f"I, JOHN OLATUNJI OF ONE LONDON SQUARE, CROSS LANES, GUILDFORD, GU1 1UN, "
         f"A DULY AUTHORISED NOTARY PUBLIC OF ENGLAND AND WALES CERTIFY THAT THIS IS A TRUE COPY OF THE DOCUMENT "
@@ -182,8 +151,9 @@ def build_notary_paragraph(document_type, customer_name, schedule_date):
 
 def get_bold_words(document_type, customer_name, schedule_date):
     return [
-        word.upper() for word in (document_type.split() + customer_name.split() + [schedule_date])    
-    ]
+            word.upper() for word in (document_type.split() + customer_name.split() + [schedule_date])    
+        ]
+     
 
 
 def draw_paragraph_with_bold(c, paragraph, start_x, start_y, width=80, font_size=10, bold_words=None):
@@ -197,6 +167,7 @@ def draw_paragraph_with_bold(c, paragraph, start_x, start_y, width=80, font_size
         for word in line.split(" "):
             if word.strip(",.").upper() in bold_words:
                 text_obj.setFont("Helvetica-Bold", font_size)
+                # print(text_obj)
             else:
                 text_obj.setFont("Helvetica", font_size)
             text_obj.textOut(word + " ")
@@ -217,8 +188,13 @@ def merge_overlay(base_page, overlay_buffer):
     return base_page
 
 
+###########################################
+# Convert images to a single PDF
+###########################################
+
+
 def convert_images_to_pdf(files):
-    """Convert one or multiple images (or PDF pages) into a single compressed PDF with dynamic sizing."""
+    """Convert one or multiple images (or PDF pages) into a single compressed PDF."""
     pdf_buffer = BytesIO()
     c = canvas.Canvas(pdf_buffer, pagesize=A4)
     page_width, page_height = A4
@@ -231,20 +207,18 @@ def convert_images_to_pdf(files):
             for img in imgs:
                 if img is None:
                     continue
-                
-                # Compress with better quality
-                compressed_buf = compress_image(img, quality=80)
-                
-                # Calculate dynamic size maintaining aspect ratio
-                width, height = calculate_dynamic_size(compressed_buf, 
-                                                     max_width=page_width * 0.9, 
-                                                     max_height=page_height * 0.9)
-                
-                # Center on page
-                x = (page_width - width) / 2
-                y = (page_height - height) / 2
+                # Compress
+                compressed_buf = compress_image(img)
+                comp_img = Image.open(compressed_buf)
 
-                c.drawImage(ImageReader(compressed_buf), x, y, width=width, height=height)
+                img_width, img_height = comp_img.size
+                ratio = min(page_width / img_width, page_height / img_height)
+                new_width = img_width * ratio
+                new_height = img_height * ratio
+                x = (page_width - new_width) / 2
+                y = (page_height - new_height) / 2
+
+                c.drawImage(ImageReader(compressed_buf), x, y, width=new_width, height=new_height)
                 c.showPage()
         except Exception as e:
             print(f"Error processing {getattr(file, 'name', 'unknown')}: {e}")
@@ -253,6 +227,26 @@ def convert_images_to_pdf(files):
     pdf_buffer.seek(0)
     return pdf_buffer
 
+### convert the image size in points
+def get_image_size_in_points(img_buf):
+    """
+    Convert a compressed BytesIO (JPEG/PNG) into width/height in points.
+    Default assumes 96 dpi if no dpi is stored.
+    """
+    img = Image.open(img_buf)
+    # print(img.info)
+    # dpi_val = img.info.get("dpi", (140 ,96))[0]
+    dpi_val = img.info.get("dpi", (144 , 144 ))[0]  # fallback to 96 if not present
+
+    
+    # print(dpi_val)
+    width_px, height_px = img.size
+    print(width_px)
+    width_pt = (width_px / dpi_val) * 72
+    height_pt = (height_px / dpi_val) * 72
+    print(f"width{float(width_pt)}")
+    print(f"hight+{float(height_pt)}")
+    return width_pt, height_pt
 
 # -----------------------
 # Main Document Generator
@@ -261,8 +255,11 @@ def convert_images_to_pdf(files):
 def generate_document(first_image, back_image, first_image_2, back_image_2,
                       document_type, layout, multiPagePdf,
                       qr_text, customer_name, schedule_date=None):
+    # print(f"{customer_name} this constomer name")
+    # print(f"{qr_text} qr text")
 
     overlay_buffer = BytesIO()
+    # Enable page compression on every canvas we create
     c = canvas.Canvas(overlay_buffer, pagesize=A4)
     page_width, page_height = A4
 
@@ -271,19 +268,28 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
     back_image = load_image(back_image)
     front_image_2 = load_image(first_image_2)
     back_image_2 = load_image(back_image_2)
+    
+    # img =Image.open(first_image)
+    # dpi = img.info.get("dpi", (96, 96))[0]  # fallback to 96 if not present
+
+    # print(f"DPI: {dpi}")
+    # print(front_image)
+    # print(back_image)
 
     # Compress only if we got a PIL image (lists mean PDF pages; not used here)
-    front_image = compress_image(front_image, quality=80)  # Better quality
-    back_image = compress_image(back_image, quality=80)
-    front_image_2 = compress_image(front_image_2, quality=80)
-    back_image_2 = compress_image(back_image_2, quality=80)
-    width = 270
-    height = 180  
+    front_image = compress_image(front_image)
+    back_image = compress_image(back_image)
+    front_image_2 = compress_image(front_image_2)
+    back_image_2 = compress_image(back_image_2)
+    
+    
+
     # -------------------------
     # Layout specific handling
     # -------------------------
 
     if layout == "ONENOTARY":
+        # Start fresh overlay
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
 
@@ -293,37 +299,19 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
 
         c.drawString(200, 428, document_type or "")
 
-        # Use dynamic sizing for ONENOTARY layout
-        if back_image is not None:
-            # Two images side by side with dynamic sizing
-            available_width = page_width - 100  # margins
-            width_each = (available_width - 20) / 2  # 20px gap
-            
-            width1, height1 = calculate_dynamic_size(front_image, 
-                                                   max_width=width_each, 
-                                                   max_height=height)
-            width2, height2 = calculate_dynamic_size(back_image, 
-                                                   max_width=width_each, 
-                                                   max_height=height)
-            
-            start_x = (page_width - (width1 + width2 + 20)) / 2
-            image_y = page_height - 250
-            
+        image_width, image_height = 280, 230
+        image_y = page_height - 250
+
+        if  back_image is not None:
+            start_x = (page_width - (2 * image_width)) / 2
             front_image.seek(0)
             back_image.seek(0)
-            c.drawImage(ImageReader(front_image), start_x, image_y, width=width1, height=height1)
-            c.drawImage(ImageReader(back_image), start_x + width1 + 20, image_y, width=width2, height=height2)
-            
+            c.drawImage(ImageReader(front_image), start_x, image_y, width=image_width, height=image_height)
+            c.drawImage(ImageReader(back_image), start_x + image_width, image_y, width=image_width, height=image_height)
         elif front_image is not None:
-            # Single image centered with dynamic sizing
-            width, height = calculate_dynamic_size(front_image, 
-                                                 max_width=width, 
-                                                 max_height=height)
-            x_center = (page_width - width) / 2
-            image_y = page_height - 250
-            
+            x_center = (page_width - image_width) / 2
             front_image.seek(0)
-            c.drawImage(ImageReader(front_image), x_center, image_y, width=width, height=height)
+            c.drawImage(ImageReader(front_image), x_center, image_y, width=image_width, height=image_height)
 
         c.save()
         overlay_buffer.seek(0)
@@ -337,25 +325,17 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         return FileResponse(result_buffer, as_attachment=True, filename="Notary_Format_document.pdf")
 
     elif layout == "UK88":
+        # Start fresh overlay
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
 
-        if front_image and back_image:
-            width, height = calculate_dynamic_size(back_image, max_width=width, max_height=height)
-            x_center = (page_width - width) / 2
-            back_image.seek(0)
+        if front_image is not None:
             front_image.seek(0)
-            
-            c.drawImage(ImageReader(front_image), x_center, 570, width=width, height=height)
-            c.drawImage(ImageReader(back_image), x_center, 320, width=width, height=height)
-            
-        elif front_image  :
-            width, height = calculate_dynamic_size(front_image, max_width=width, max_height=height)
-            x_center = (page_width - width) / 2
-            front_image.seek(0)
-            c.drawImage(ImageReader(front_image), x_center, 570, width=width, height=height)
+            c.drawImage(ImageReader(front_image), (page_width-230)/2, 570, width=230, height=190)
 
-        
+        if back_image is not None:
+            back_image.seek(0)
+            c.drawImage(ImageReader(back_image), (page_width-230)/2, 320, width=230, height=190)
 
         paragraph = build_notary_paragraph(document_type, customer_name, schedule_date)
         bold_words = get_bold_words(document_type, customer_name, schedule_date)
@@ -385,7 +365,9 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         writer.write(paragraph_page_buffer)
         paragraph_page_buffer.seek(0)
 
+        # If user uploaded images instead of a single PDF, convert to one PDF first
         if multiPagePdf and not hasattr(multiPagePdf, "read"):
+            # Unexpected type; ignore
             pass
 
         response_pdf = BytesIO(multiPagePdf.read()) if multiPagePdf else BytesIO()
@@ -412,7 +394,7 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
         c.drawString(205, 594, document_type or "")
-        # add_qr(c, qr_text)
+        add_qr(c, qr_text)
         c.save()
         overlay_buffer.seek(0)
 
@@ -463,89 +445,72 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         return FileResponse(result_buffer, as_attachment=True, filename="multi_Format_document.pdf")
     else:
         # ----------------
-        # Simple image placement logic (from 2nd code) with dynamic sizing
+        # Image placement (generic)
         # ----------------
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
-        # width = 270
-        # height = 180    
-        
 
+        # Draw whichever buffers exist
         if front_image and back_image and front_image_2 and back_image_2:
             current_y = 570
-            # width = 270
-            # height = 180
+            width, height = 270, 180
             current_x = 30
             x_back = (page_width - current_x) / 2
 
+            # for buf, (x, y) in [
+            #     (front_image, (current_x, current_y)),
+            #     (back_image, (x_back+20, current_y)),
+            #     (front_image_2, (current_x, 350)),
+            #     (back_image_2, (x_back+20, 350)),
+            # ]:
+            #     buf.seek(0)
+            #     c.drawImage(ImageReader(buf), x, y, width, height)
             c.drawImage(ImageReader(front_image), current_x, current_y, width, height)
             c.drawImage(ImageReader(back_image), x_back+20, current_y, width, height)
             c.drawImage(ImageReader(front_image_2), current_x, 350, width, height)
             c.drawImage(ImageReader(back_image_2), x_back+20, 350, width, height)
 
         elif front_image and front_image_2 and back_image_2:
-                x_center = (page_width - width) / 2
+            width, height = 280, 170
             
-                # One large on top, two smaller below
-                # width, height = 270, 180
-                
-                # c.drawImage(ImageReader(front_image), 160, 530, width, height)
-                c.drawImage(ImageReader(front_image), x_center, 530, width, height)
-                c.drawImage(ImageReader(front_image_2), 10, 260, width, height)
-                c.drawImage(ImageReader(back_image_2), 10+width+20, 260, width, height)
-            
+            c.drawImage(ImageReader(front_image), 90, 530, width=360, height=250)
+            c.drawImage(ImageReader(front_image_2), 10, 260, width, height)
+            c.drawImage(ImageReader(back_image_2), 10+width+20, 260, width, height)
+
         elif front_image and back_image and front_image_2:
-                # Two on top, one below
-                # width, height = 270, 180
-                c.drawImage(ImageReader(front_image), 40, 550, width, height)
-                c.drawImage(ImageReader(back_image), 40+width, 550, width, height)
-                c.drawImage(ImageReader(front_image_2), (page_width-width)/2, 250, width, height)
-
+            width, height = 270, 180
+            c.drawImage(ImageReader(front_image), 40, 550, width, height)
+            c.drawImage(ImageReader(back_image), 40+width, 550, width, height)
+            c.drawImage(ImageReader(front_image_2), (page_width-width)/2, 250, width, height)
         elif front_image and back_image:
-            
-                # Two images stacked vertically with dynamic sizing
-                # max_width = 270
-                # max_height = 180
-                
-                width1, height1 = calculate_dynamic_size(front_image, width, height)
-                width2, height2 = calculate_dynamic_size(back_image, width, height)
-                
-                x_center1 = (page_width - width1) / 2
-                x_center2 = (page_width - width2) / 2
-                current_y = page_height - height1 - 50
-                
-                c.drawImage(ImageReader(front_image), x_center1, current_y, width1, height1)
-                c.drawImage(ImageReader(back_image), x_center2, current_y - height2 - 20, width2, height2)
-            
+            width, height = 270, 180
+            x_center = (page_width - width) / 2
+            current_y = page_height - height - 50
+            c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
+            c.drawImage(ImageReader(back_image), x_center, current_y - height - 20, width, height)
+
         elif front_image and front_image_2:
-            # Two images stacked vertically
-            # max_width = 270
-            # max_height = 180
+            width, height = 270, 180
+            x_center = (page_width - width) / 2
+            current_y = page_height - height - 50
+            c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
+            c.drawImage(ImageReader(front_image_2), x_center, current_y - height - 20, width, height)
 
-            width1, height1 = calculate_dynamic_size(front_image, width, height)
-            width2, height2 = calculate_dynamic_size(front_image_2, width, height)
-
-            x_center1 = (page_width - width1) / 2
-            x_center2 = (page_width - width2) / 2
-            current_y = page_height - height1 - 50
-
-            c.drawImage(ImageReader(front_image), x_center1, current_y, width1, height1)
-            c.drawImage(ImageReader(front_image_2), x_center2, current_y - height2 - 20, width2, height2)
-
-
+        # elif front_image:
+        #     width, height = 270, 180
+        #     x_center = (page_width - width) / 2
+        #     current_y = page_height - height - 50
+        #     c.drawImage(ImageReader(front_image), x_center, current_y, width, height)
         elif front_image:
-            # Single image - use actual image size in points for better quality
-                # max_width, max_height = 270, 180
-                
-                front_image.seek(0)
-                img_width, img_height = calculate_dynamic_size(front_image, width, height)
+            front_image.seek(0)
+            img_width, img_height = get_image_size_in_points(front_image)
 
-                # Center on page
-                x_center = (page_width - img_width) / 2
-                current_y = page_height - img_height - 50
+            # center on page
+            x_center = (page_width - img_width) / 2
+            current_y = page_height - img_height - 50
 
-                c.drawImage(ImageReader(front_image), x_center, current_y,
-                    width=img_width, height=img_height)
+            c.drawImage(ImageReader(front_image), x_center, current_y,
+                width=img_width, height=img_height)
 
         add_qr(c, qr_text)
         c.save()

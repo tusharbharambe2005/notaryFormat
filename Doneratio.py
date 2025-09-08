@@ -1,6 +1,5 @@
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
-# from rest_framework.response import Response
 from django.http import FileResponse
 from django.conf import settings
 
@@ -61,163 +60,12 @@ def calculate_dynamic_size(img_buffer, max_width=400, max_height=300, min_width=
     return int(width), int(height)
 
 
-def calculate_optimal_layout(images, page_width, page_height, margin=50):
-    """
-    Calculate optimal layout for multiple images on a page.
-    Returns positions and sizes for each image.
-    """
-    available_width = page_width - (2 * margin)
-    available_height = page_height - (2 * margin)
-    
-    num_images = len([img for img in images if img is not None])
-    
-    if num_images == 0:
-        return []
-    
-    layouts = []
-    
-    if num_images == 1:
-        # Single image - center it with good size
-        img = images[0]
-        width, height = calculate_dynamic_size(img, 
-                                             max_width=available_width * 0.8, 
-                                             max_height=available_height * 0.8)
-        x = (page_width - width) / 2
-        y = (page_height - height) / 2
-        layouts.append({'buffer': img, 'x': x, 'y': y, 'width': width, 'height': height})
-    
-    elif num_images == 2:
-        # Two images - stack vertically or side by side based on aspect ratios
-        img1, img2 = images[0], images[1] if len(images) > 1 else None
-        
-        # Check if images are better arranged vertically or horizontally
-        img1_pil = Image.open(img1)
-        img1_aspect = img1_pil.width / img1_pil.height
-        img1.seek(0)
-        
-        if img2:
-            img2_pil = Image.open(img2)
-            img2_aspect = img2_pil.width / img2_pil.height
-            img2.seek(0)
-        else:
-            img2_aspect = 1
-        
-        # If both are landscape, stack vertically; if both portrait, side by side
-        if img1_aspect > 1.2 and img2_aspect > 1.2:  # Both landscape
-            # Stack vertically
-            height_each = (available_height - 20) / 2  # 20px gap
-            
-            width1, height1 = calculate_dynamic_size(img1, 
-                                                   max_width=available_width, 
-                                                   max_height=height_each)
-            width2, height2 = calculate_dynamic_size(img2, 
-                                                   max_width=available_width, 
-                                                   max_height=height_each)
-            
-            x1 = (page_width - width1) / 2
-            y1 = page_height - margin - height1
-            x2 = (page_width - width2) / 2
-            y2 = y1 - height2 - 20
-            
-            layouts.extend([
-                {'buffer': img1, 'x': x1, 'y': y1, 'width': width1, 'height': height1},
-                {'buffer': img2, 'x': x2, 'y': y2, 'width': width2, 'height': height2}
-            ])
-        else:
-            # Side by side
-            width_each = (available_width - 20) / 2  # 20px gap
-            
-            width1, height1 = calculate_dynamic_size(img1, 
-                                                   max_width=width_each, 
-                                                   max_height=available_height)
-            width2, height2 = calculate_dynamic_size(img2, 
-                                                   max_width=width_each, 
-                                                   max_height=available_height)
-            
-            x1 = margin
-            x2 = margin + width1 + 20
-            y1 = page_height - margin - height1
-            y2 = page_height - margin - height2
-            
-            layouts.extend([
-                {'buffer': img1, 'x': x1, 'y': y1, 'width': width1, 'height': height1},
-                {'buffer': img2, 'x': x2, 'y': y2, 'width': width2, 'height': height2}
-            ])
-    
-    elif num_images == 3:
-        # One large on top, two smaller below
-        img1, img2, img3 = images[:3]
-        
-        # Large image on top
-        width1, height1 = calculate_dynamic_size(img1, 
-                                               max_width=available_width * 0.8, 
-                                               max_height=available_height * 0.5)
-        x1 = (page_width - width1) / 2
-        y1 = page_height - margin - height1
-        
-        # Two smaller images below
-        remaining_height = available_height - height1 - 40
-        width_each = (available_width - 20) / 2
-        
-        width2, height2 = calculate_dynamic_size(img2, 
-                                               max_width=width_each, 
-                                               max_height=remaining_height)
-        width3, height3 = calculate_dynamic_size(img3, 
-                                               max_width=width_each, 
-                                               max_height=remaining_height)
-        
-        x2 = margin
-        x3 = margin + width2 + 20
-        y2 = y1 - height1 - 20 - height2
-        y3 = y1 - height1 - 20 - height3
-        
-        layouts.extend([
-            {'buffer': img1, 'x': x1, 'y': y1, 'width': width1, 'height': height1},
-            {'buffer': img2, 'x': x2, 'y': y2, 'width': width2, 'height': height2},
-            {'buffer': img3, 'x': x3, 'y': y3, 'width': width3, 'height': height3}
-        ])
-    
-    elif num_images >= 4:
-        # 2x2 grid
-        imgs = images[:4]
-        width_each = (available_width - 20) / 2
-        height_each = (available_height - 20) / 2
-        
-        positions = [
-            (margin, page_height - margin - height_each),  # Top left
-            (margin + width_each + 20, page_height - margin - height_each),  # Top right
-            (margin, page_height - margin - height_each * 2 - 20),  # Bottom left
-            (margin + width_each + 20, page_height - margin - height_each * 2 - 20)  # Bottom right
-        ]
-        
-        for i, img in enumerate(imgs):
-            if img:
-                width, height = calculate_dynamic_size(img, 
-                                                     max_width=width_each, 
-                                                     max_height=height_each)
-                x, y = positions[i]
-                layouts.append({
-                    'buffer': img, 
-                    'x': x, 
-                    'y': y + (height_each - height) / 2,  # Center vertically in allocated space
-                    'width': width, 
-                    'height': height
-                })
-    
-    return layouts
-
-
-###########################################
-# compress_image
-###########################################
 def compress_image(img, max_width=1200, quality=75):
     """
     Resize + compress a PIL.Image to JPEG in a BytesIO buffer.
     SAFE: returns None if img is None.
-    If img is already a BytesIO (assumed compressed), returns it unchanged.
     Increased quality to 75 for better clarity.
     """
-
     if not isinstance(img, Image.Image):
         return None  # safety: skip invalid inputs
     
@@ -237,7 +85,7 @@ def compress_image(img, max_width=1200, quality=75):
     buf.seek(0)
     return buf
 
-#compress PDF in multipageformat
+
 def compress_pdf_multipage(input_buffer, dpi=150, quality=80):
     """
     Two-step PDF compression with higher DPI and quality for better clarity.
@@ -369,10 +217,6 @@ def merge_overlay(base_page, overlay_buffer):
     return base_page
 
 
-###########################################
-# Convert images to a single PDF
-###########################################
-
 def convert_images_to_pdf(files):
     """Convert one or multiple images (or PDF pages) into a single compressed PDF with dynamic sizing."""
     pdf_buffer = BytesIO()
@@ -465,7 +309,7 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
 
         # Use dynamic sizing for ONENOTARY layout
         if back_image is not None:
-            # Two images side by side
+            # Two images side by side with dynamic sizing
             available_width = page_width - 100  # margins
             width_each = (available_width - 20) / 2  # 20px gap
             
@@ -485,7 +329,7 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             c.drawImage(ImageReader(back_image), start_x + width1 + 20, image_y, width=width2, height=height2)
             
         elif front_image is not None:
-            # Single image centered
+            # Single image centered with dynamic sizing
             width, height = calculate_dynamic_size(front_image, 
                                                  max_width=400, 
                                                  max_height=230)
@@ -628,26 +472,87 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
         return FileResponse(result_buffer, as_attachment=True, filename="multi_Format_document.pdf")
     else:
         # ----------------
-        # Dynamic image placement using the optimal layout calculator
+        # Simple image placement logic (from 2nd code) with dynamic sizing
         # ----------------
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
 
-        # Collect all available images
-        images = [img for img in [front_image, back_image, front_image_2, back_image_2] if img is not None]
-        
-        # Calculate optimal layout
-        layouts = calculate_optimal_layout(images, page_width, page_height, margin=50)
-        
-        # Draw all images according to calculated layout
-        for layout_info in layouts:
-            buffer = layout_info['buffer']
-            buffer.seek(0)
-            c.drawImage(ImageReader(buffer), 
-                       layout_info['x'], 
-                       layout_info['y'], 
-                       width=layout_info['width'], 
-                       height=layout_info['height'])
+        # Count available images
+        available_images = [img for img in [front_image, back_image, front_image_2, back_image_2] if img is not None]
+        num_images = len(available_images)
+
+        if num_images == 4:
+            # All 4 images - 2x2 grid with dynamic sizing
+            current_y = 570
+            width = 270
+            height = 180
+            current_x = 30
+            x_back = (page_width - current_x) / 2
+
+            c.drawImage(ImageReader(front_image), current_x, current_y, width, height)
+            c.drawImage(ImageReader(back_image), x_back+20, current_y, width, height)
+            c.drawImage(ImageReader(front_image_2), current_x, 350, width, height)
+            c.drawImage(ImageReader(back_image_2), x_back+20, 350, width, height)
+
+        elif num_images == 3:
+            if front_image and front_image_2 and back_image_2:
+                # One large on top, two smaller below
+                width, height = 280, 170
+                
+                c.drawImage(ImageReader(front_image), 90, 530, width=360, height=250)
+                c.drawImage(ImageReader(front_image_2), 10, 260, width, height)
+                c.drawImage(ImageReader(back_image_2), 10+width+20, 260, width, height)
+            
+            elif front_image and back_image and front_image_2:
+                # Two on top, one below
+                width, height = 270, 180
+                c.drawImage(ImageReader(front_image), 40, 550, width, height)
+                c.drawImage(ImageReader(back_image), 40+width, 550, width, height)
+                c.drawImage(ImageReader(front_image_2), (page_width-width)/2, 250, width, height)
+
+        elif num_images == 2:
+            if front_image and back_image:
+                # Two images stacked vertically with dynamic sizing
+                max_width = 270
+                max_height = 180
+                
+                width1, height1 = calculate_dynamic_size(front_image, max_width, max_height)
+                width2, height2 = calculate_dynamic_size(back_image, max_width, max_height)
+                
+                x_center1 = (page_width - width1) / 2
+                x_center2 = (page_width - width2) / 2
+                current_y = page_height - height1 - 50
+                
+                c.drawImage(ImageReader(front_image), x_center1, current_y, width1, height1)
+                c.drawImage(ImageReader(back_image), x_center2, current_y - height2 - 20, width2, height2)
+            
+            elif front_image and front_image_2:
+                # Two images stacked vertically
+                max_width = 270
+                max_height = 180
+                
+                width1, height1 = calculate_dynamic_size(front_image, max_width, max_height)
+                width2, height2 = calculate_dynamic_size(front_image_2, max_width, max_height)
+                
+                x_center1 = (page_width - width1) / 2
+                x_center2 = (page_width - width2) / 2
+                current_y = page_height - height1 - 50
+                
+                c.drawImage(ImageReader(front_image), x_center1, current_y, width1, height1)
+                c.drawImage(ImageReader(front_image_2), x_center2, current_y - height2 - 20, width2, height2)
+
+        elif num_images == 1:
+            # Single image - use actual image size in points for better quality
+            if front_image:
+                front_image.seek(0)
+                img_width, img_height = get_image_size_in_points(front_image)
+
+                # Center on page
+                x_center = (page_width - img_width) / 2
+                current_y = page_height - img_height - 50
+
+                c.drawImage(ImageReader(front_image), x_center, current_y,
+                    width=img_width, height=img_height)
 
         add_qr(c, qr_text)
         c.save()
