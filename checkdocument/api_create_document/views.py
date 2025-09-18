@@ -217,8 +217,10 @@ def merge_overlay(base_page, overlay_buffer):
     return base_page
 
 
-def convert_images_to_pdf(files):
-    """Convert one or multiple images (or PDF pages) into a single compressed PDF with dynamic sizing."""
+def convert_images_to_pdf(files, force_compress=False):
+    """Convert one or multiple images (or PDF pages) into a single PDF.
+       Compression only if force_compress=True
+    """
     pdf_buffer = BytesIO()
     c = canvas.Canvas(pdf_buffer, pagesize=A4)
     page_width, page_height = A4
@@ -231,21 +233,28 @@ def convert_images_to_pdf(files):
             for img in imgs:
                 if img is None:
                     continue
-                
-                # Compress with better quality
-                compressed_buf = compress_image(img, quality=80)
-                
-                # Calculate dynamic size maintaining aspect ratio
-                width, height = calculate_dynamic_size(compressed_buf, 
-                                                     max_width=page_width * 0.9, 
-                                                     max_height=page_height * 0.9)
-                
-                # Center on page
-                x = (page_width - width) / 2
-                y = (page_height - height) / 2
 
-                c.drawImage(ImageReader(compressed_buf), x, y, width=width, height=height)
+                if force_compress:
+                    img_buf = compress_image(img)
+                    comp_img = Image.open(img_buf)
+                else:
+                    img_buf = BytesIO()
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    img.save(img_buf, format="JPEG")
+                    img_buf.seek(0)
+                    comp_img = Image.open(img_buf)
+
+                img_width, img_height = comp_img.size
+                ratio = min(page_width / img_width, page_height / img_height)
+                new_width = img_width * ratio
+                new_height = img_height * ratio
+                x = (page_width - new_width) / 2
+                y = (page_height - new_height) / 2
+
+                c.drawImage(ImageReader(img_buf), x, y, width=new_width, height=new_height)
                 c.showPage()
+
         except Exception as e:
             print(f"Error processing {getattr(file, 'name', 'unknown')}: {e}")
 
@@ -354,10 +363,10 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             c.drawImage(ImageReader(back_image), x_center2, 320, width=width2, height=height2)
             
         elif front_image  :
-            width, height = calculate_dynamic_size(front_image, max_width=width, max_height=height)
+            width, height = calculate_dynamic_size(front_image, max_width=400, max_height=280)
             x_center = (page_width - width) / 2
             front_image.seek(0)
-            c.drawImage(ImageReader(front_image), x_center, 570, width=width, height=height)
+            c.drawImage(ImageReader(front_image), x_center, 520, width=width, height=height)
 
         
 
@@ -592,11 +601,21 @@ class GeneratePDFView(APIView):
         schedule_date = request.data.get('schedule_date')
 
         multiPagePdf = None
+
         if multiPagePdf_files:
             if len(multiPagePdf_files) == 1 and multiPagePdf_files[0].name.lower().endswith(".pdf"):
                 multiPagePdf = multiPagePdf_files[0]
             else:
-                multiPagePdf = convert_images_to_pdf(multiPagePdf_files)
+                # Step 1: Make PDF without compression
+                temp_pdf = convert_images_to_pdf(multiPagePdf_files, force_compress=False)
+
+                # Step 2: Check size
+                size_in_mb = len(temp_pdf.getvalue()) / (1024 * 1024)
+                if size_in_mb > 5:  
+                    # Compress only if >5 MB
+                    temp_pdf = convert_images_to_pdf(multiPagePdf_files, force_compress=True)
+
+                multiPagePdf = temp_pdf
 
         response = generate_document(
             first_image, back_image, first_image_2, back_image_2,
