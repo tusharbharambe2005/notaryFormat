@@ -605,6 +605,16 @@ class GeneratePDFView(APIView):
         if multiPagePdf_files:
             if len(multiPagePdf_files) == 1 and multiPagePdf_files[0].name.lower().endswith(".pdf"):
                 multiPagePdf = multiPagePdf_files[0]
+
+                #  size check for direct uploaded PDF
+                size_in_mb = multiPagePdf.size / (1024 * 1024)
+                if size_in_mb > 5:
+                    # Compress if >5MB
+                    buffer = BytesIO(multiPagePdf.read())
+                    multiPagePdf.seek(0)
+                    compressed_pdf = compress_pdf_multipage(buffer)
+                    multiPagePdf = compressed_pdf
+
             else:
                 # Step 1: Make PDF without compression
                 temp_pdf = convert_images_to_pdf(multiPagePdf_files, force_compress=False)
