@@ -63,7 +63,7 @@ def calculate_dynamic_size(img_input, max_width=400, max_height=300, min_width=5
             width = max_width
             height = width / aspect_ratio
 
-    # enforce minimums
+    # enforce minimums Yeh code minimum size constraints enforce karta hai. Agar calculated dimensions bahut chote ho jayen, toh image ko minimum readable size mein force karta hai.
     if width < min_width:
         width = min_width
         height = max(min_height, width / max(aspect_ratio, 0.0001))
@@ -351,7 +351,6 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
                 
                 width1, height1 = calculate_dynamic_size(front_image, max_width=max_img_width, max_height=max_img_height_limit, min_width=50, min_height=50)
                 width2, height2 = calculate_dynamic_size(back_image, max_width=max_img_width, max_height=max_img_height_limit, min_width=50, min_height=50)
-                max_img_height = max(height1, height2)
             
             # Center vertically within available space
             image_y = page_height - 250
@@ -409,20 +408,35 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             width1, height1 = calculate_dynamic_size(front_image, max_width=page_width - 2 * margin, max_height=page_height * 0.35)
             width2, height2 = calculate_dynamic_size(back_image,  max_width=page_width - 2 * margin, max_height=page_height * 0.35)
 
+            max_img_height = max(height1, height2)
+            print(width1)
+            
+            # NEW CONDITION: If height is greater than 230, use smaller dimensions
+            if max_img_height > 290:
+                max_img_width = min(page_width - 2 * margin, 400)  # Limit width per image
+                max_img_height_limit = 290  # Limit height per image
+                
+                width1, height1 = calculate_dynamic_size(front_image, max_width=max_img_width, max_height=max_img_height_limit, min_width=50, min_height=50)
+                width2, height2 = calculate_dynamic_size(back_image, max_width=max_img_width, max_height=max_img_height_limit, min_width=50, min_height=50)
+                max_img_height = max(height1, height2)
             x_center1 = (page_width - width1) / 2
             x_center2 = (page_width - width2) / 2
 
             front_image.seek(0)
             back_image.seek(0)
             # place first near top
-            top_y = page_height  - height1
+            top_y = page_height  - height1-15
             c.drawImage(ImageReader(front_image), x_center1, top_y, width=width1, height=height1)
             # place second below
-            second_y = top_y - height2 - 20
+            second_y = top_y - height2 - 25
             c.drawImage(ImageReader(back_image), x_center2, second_y, width=width2, height=height2)
 
         elif front_image:
             width, height = calculate_dynamic_size(front_image, max_width=page_width - 2 * margin, max_height=page_height * 0.6)
+            if height > 355:
+                max_w = min(page_width - 2 * margin, 400)  # Limit width
+                max_h = 355  # Limit height
+                width, height = calculate_dynamic_size(front_image, max_width=max_w, max_height=max_h, min_width=50, min_height=50)
             x_center = (page_width - width) / 2
             front_image.seek(0)
             c.drawImage(ImageReader(front_image), x_center, page_height - margin - height, width=width, height=height)
