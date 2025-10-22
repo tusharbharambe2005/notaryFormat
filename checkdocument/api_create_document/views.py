@@ -411,8 +411,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             max_img_height = max(height1, height2)
             print(width1)
             
-            # NEW CONDITION: If height is greater than 230, use smaller dimensions
-            if max_img_height > 290:
+            # NEW CONDITION: If height is greater than 270, use smaller dimensions
+            if max_img_height > 270:
                 max_img_width = min(page_width - 2 * margin, 400)  # Limit width per image
                 max_img_height_limit = 290  # Limit height per image
                 
@@ -425,21 +425,21 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             front_image.seek(0)
             back_image.seek(0)
             # place first near top
-            top_y = page_height  - height1-15
-            c.drawImage(ImageReader(front_image), x_center1, top_y, width=width1, height=height1)
+            top_y = page_height  - height1-45
+            c.drawImage(ImageReader(front_image), x_center1, top_y, width=width1, height=height1-30)
             # place second below
             second_y = top_y - height2 - 25
-            c.drawImage(ImageReader(back_image), x_center2, second_y, width=width2, height=height2)
+            c.drawImage(ImageReader(back_image), x_center2, second_y, width=width2, height=height2-30)
 
         elif front_image:
             width, height = calculate_dynamic_size(front_image, max_width=page_width - 2 * margin, max_height=page_height * 0.6)
             if height > 355:
-                max_w = min(page_width - 2 * margin, 400)  # Limit width
-                max_h = 355  # Limit height
+                max_w = min(page_width - 2 * margin, 380)  # Limit width
+                max_h = 300  # Limit height
                 width, height = calculate_dynamic_size(front_image, max_width=max_w, max_height=max_h, min_width=50, min_height=50)
             x_center = (page_width - width) / 2
             front_image.seek(0)
-            c.drawImage(ImageReader(front_image), x_center, page_height - margin - height, width=width, height=height)
+            c.drawImage(ImageReader(front_image), x_center, page_height - margin - height, width=width, height=height-30)
 
         paragraph = build_notary_paragraph(document_type, customer_name, schedule_date)
         bold_words = get_bold_words(document_type, customer_name, schedule_date)
@@ -630,8 +630,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
                     total_needed = height1 + height2 + gap
 
                 start_y = avail_bottom + (avail_height - total_needed) / 2
-                c.drawImage(ImageReader(front_image), (page_width - width1) / 2, start_y + height2 + gap, width=width1, height=height1)
-                c.drawImage(ImageReader(back_image),  (page_width - width2) / 2, start_y, width=width2, height=height2)
+                c.drawImage(ImageReader(front_image), (page_width - width1) / 2, start_y + height2 + gap, width=width1-30, height=height1-30)
+                c.drawImage(ImageReader(back_image),  (page_width - width2) / 2, start_y, width=width2-30, height=height2-30)
 
             elif front_image and front_image_2:
                 width1, height1 = calculate_dynamic_size(front_image, max_width=avail_width, max_height=avail_height * 0.6)
@@ -646,16 +646,16 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
 
                 start_y = avail_bottom + (avail_height - total_needed) / 2
 
-                c.drawImage(ImageReader(front_image), (page_width - width1) / 2, start_y + height2 + gap, width=width1, height=height1)
+                c.drawImage(ImageReader(front_image), (page_width - width1) / 2, start_y + height2 + gap, width=width1-30, height=height1-30)
 
-                c.drawImage(ImageReader(front_image_2), (page_width - width2) / 2, start_y, width=width2, height=height2)
+                c.drawImage(ImageReader(front_image_2), (page_width - width2) / 2, start_y, width=width2-30, height=height2-30)
 
             # Single image centered
             elif front_image:
-                w, h = calculate_dynamic_size(front_image, max_width=avail_width, max_height=avail_height)
-                x_center = (page_width - w) / 2
-                y_center = avail_bottom + (avail_height - h) / 2
-                c.drawImage(ImageReader(front_image), x_center, y_center, width=w, height=h)
+                width, height = calculate_dynamic_size(front_image, max_width=avail_width, max_height=avail_height)
+                x_center = (page_width - width) / 2
+                y_center = avail_bottom + (avail_height - height) / 2
+                c.drawImage(ImageReader(front_image), x_center, y_center, width=width-30, height=height)
 
             # fallback: nothing to draw
         except Exception as e:
