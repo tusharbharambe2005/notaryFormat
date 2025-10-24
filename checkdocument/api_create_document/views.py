@@ -427,7 +427,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
 
             front_image.seek(0)
             back_image.seek(0)
-            c.drawImage(stamp_path,400,30,width=90,height=90)
+            c.drawImage(stamp_path,400,70,width=100,height=60)
+
             c.drawImage(info_path,100,10,width=120,height=120)
             # place first near top
             top_y = page_height  - height1-45
@@ -445,7 +446,7 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
                 width, height = calculate_dynamic_size(front_image, max_width=max_w, max_height=max_h, min_width=50, min_height=50)
             x_center = (page_width - width) / 2
             front_image.seek(0)
-            c.drawImage(stamp_path,400,30,width=90,height=90)
+            c.drawImage(stamp_path,400,70,width=100,height=60)
             c.drawImage(info_path,100,10,width=120,height=120)
             print(info_path)
             c.drawImage(ImageReader(front_image), x_center, page_height - margin - height, width=width, height=height-30)
