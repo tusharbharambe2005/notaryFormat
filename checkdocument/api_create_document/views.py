@@ -311,6 +311,9 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
     margin = 50
     gap = 20
 
+    stamp_path = os.path.join(settings.MEDIA_ROOT, 'templates', 'info.jpeg')
+    info_path = os.path.join(settings.MEDIA_ROOT, 'templates', 'stamp.jpeg')
+    
 # -------------------------
 # ONENOTARY 
 # -------------------------
@@ -424,12 +427,15 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
 
             front_image.seek(0)
             back_image.seek(0)
+            c.drawImage(stamp_path,400,30,width=90,height=90)
+            c.drawImage(info_path,100,10,width=120,height=120)
             # place first near top
             top_y = page_height  - height1-45
             c.drawImage(ImageReader(front_image), x_center1, top_y, width=width1, height=height1-30)
             # place second below
             second_y = top_y - height2 - 25
             c.drawImage(ImageReader(back_image), x_center2, second_y, width=width2, height=height2-30)
+            
 
         elif front_image:
             width, height = calculate_dynamic_size(front_image, max_width=page_width - 2 * margin, max_height=page_height * 0.6)
@@ -439,12 +445,17 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
                 width, height = calculate_dynamic_size(front_image, max_width=max_w, max_height=max_h, min_width=50, min_height=50)
             x_center = (page_width - width) / 2
             front_image.seek(0)
+            c.drawImage(stamp_path,400,30,width=90,height=90)
+            c.drawImage(info_path,100,10,width=120,height=120)
+            print(info_path)
             c.drawImage(ImageReader(front_image), x_center, page_height - margin - height, width=width, height=height-30)
 
         paragraph = build_notary_paragraph(document_type, customer_name, schedule_date)
         bold_words = get_bold_words(document_type, customer_name, schedule_date)
         # place paragraph a bit lower
         draw_paragraph_with_bold(c, paragraph, 50, 200, width=80, font_size=10, bold_words=bold_words)
+        
+        
         add_qr(c, qr_text)
         c.save()
         overlay_buffer.seek(0)
