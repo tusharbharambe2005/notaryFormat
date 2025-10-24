@@ -469,7 +469,8 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             paragraph = build_notary_paragraph(document_type, customer_name, schedule_date)
             bold_words = get_bold_words(document_type, customer_name, schedule_date)
             draw_paragraph_with_bold(c, paragraph, 50, 800, width=80, font_size=10, bold_words=bold_words)
-
+            c.drawImage(stamp_path,400,70,width=100,height=60)
+            c.drawImage(info_path,100,10,width=120,height=120)
             add_qr(c, qr_text)
             c.save()
             overlay_buffer.seek(0)
