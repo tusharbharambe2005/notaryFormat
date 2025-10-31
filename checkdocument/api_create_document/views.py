@@ -99,7 +99,7 @@ def compress_image(img, max_width=1200, quality=75):
 
 
 
-def compress_pdf_multipage(input_buffer, dpi=100, quality=60):
+def compress_pdf_multipage(input_buffer, dpi=100, quality=100):
     """
     Rasterize & recompress each page (fitz), produce a new PDF as BytesIO.
     """
@@ -498,8 +498,20 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             merger.write(final_buffer)
             merger.close()
             final_buffer.seek(0)
-            compressed_final = compress_pdf_multipage(final_buffer)
-            return FileResponse(compressed_final, as_attachment=True, filename="UK88_Multi_Page_Pdf.pdf")
+            # ---- Conditional Compression ----
+            size_mb = len(final_buffer.getbuffer()) / (1024 * 1024)
+            print(f"PDF size before compression: {size_mb:.2f} MB")
+
+            if size_mb > 5:
+                print("Compressing PDF (size > 5 MB)...")
+                compressed_final = compress_pdf_multipage(final_buffer, dpi=100, quality=80)
+                final_output = compressed_final
+            else:
+                print("Skipping compression (size <= 5 MB).")
+                final_output = final_buffer
+
+            final_output.seek(0)
+            return FileResponse(final_output, as_attachment=True, filename="UK88_Multi_Page_Pdf.pdf")
 
     elif layout == "us_multipage":
             template_path = os.path.join(settings.MEDIA_ROOT, 'templates', 'US_MultiPage_format.pdf')
@@ -534,9 +546,21 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             merger.write(final_buffer)
             merger.close()
             final_buffer.seek(0)
-            compressed_final = compress_pdf_multipage(final_buffer)
+            # ---- Conditional Compression ----
+            size_mb = len(final_buffer.getbuffer()) / (1024 * 1024)
+            print(f"PDF size before compression: {size_mb:.2f} MB")
+
+            if size_mb > 5:
+                print("Compressing PDF (size > 5 MB)...")
+                compressed_final = compress_pdf_multipage(final_buffer, dpi=100, quality=80)
+                final_output = compressed_final
+            else:
+                print("Skipping compression (size <= 5 MB).")
+                final_output = final_buffer
+
+            final_output.seek(0)
             
-            return FileResponse(compressed_final, as_attachment=True, filename="Multi_Page_Pdf.pdf")
+            return FileResponse(final_output, as_attachment=True, filename="Multi_Page_Pdf.pdf")
 
     elif layout == "non_multipage":
             c = canvas.Canvas(overlay_buffer, pagesize=A4)
@@ -557,7 +581,20 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
             result_buffer = BytesIO()
             output.write(result_buffer)
             result_buffer.seek(0)
-            return FileResponse(result_buffer, as_attachment=True, filename="multi_Format_document.pdf")
+            # ---- Conditional Compression ----
+            size_mb = len(final_buffer.getbuffer()) / (1024 * 1024)
+            print(f"PDF size before compression: {size_mb:.2f} MB")
+
+            if size_mb > 5:
+                print("Compressing PDF (size > 5 MB)...")
+                compressed_final = compress_pdf_multipage(final_buffer, dpi=100, quality=80)
+                final_output = compressed_final
+            else:
+                print("Skipping compression (size <= 5 MB).")
+                final_output = final_buffer
+
+            final_output.seek(0)
+            return FileResponse(final_output, as_attachment=True, filename="multi_Format_document.pdf")
     else:
         overlay_buffer = BytesIO()
         c = canvas.Canvas(overlay_buffer, pagesize=A4)
