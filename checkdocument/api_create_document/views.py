@@ -74,7 +74,7 @@ def calculate_dynamic_size(img_input, max_width=400, max_height=300, min_width=5
     return int(round(width)), int(round(height))
 
 
-def compress_image(img, max_width=1200, quality=75):
+def compress_image(img, max_width=1200, quality=90):
     """
     Resize + compress a PIL.Image to JPEG in a BytesIO buffer.
     Accepts PIL.Image. Returns BytesIO or None.
@@ -302,10 +302,10 @@ def generate_document(first_image, back_image, first_image_2, back_image_2,
     back_image_2 = load_image(back_image_2)
 
     # Compress only if we got a PIL image (lists mean PDF pages; not used here)
-    front_image = compress_image(front_image, quality=80)  # Better quality
-    back_image = compress_image(back_image, quality=80)
-    front_image_2 = compress_image(front_image_2, quality=80)
-    back_image_2 = compress_image(back_image_2, quality=80)
+    front_image = compress_image(front_image, quality=90)  # Better quality
+    back_image = compress_image(back_image, quality=90)
+    front_image_2 = compress_image(front_image_2, quality=90)
+    back_image_2 = compress_image(back_image_2, quality=90)
 
     # Constants defaults
     margin = 50
